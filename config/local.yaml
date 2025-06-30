@@ -1,0 +1,11 @@
+env : "local" # local, dev, prod
+storage:
+  db_host: "localhost"
+  db_port: 5432
+  db_name: "self_improver"
+  db_user: "postgres"
+  db_pass: "password"
+http_server:
+  address: "localhost:8080"
+  timeout: 5s
+  idle_timeout: 60s
