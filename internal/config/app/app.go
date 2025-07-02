@@ -17,6 +17,13 @@ type Config struct {
 	Debug bool   // Debug mode flag
 }
 
+func (c *Config) String() string {
+	return fmt.Sprintf(
+		"{Env: %s, Debug: %v}",
+		c.Env,
+		c.Debug)
+}
+
 func (c *Config) Validate() []error {
 	errs := make([]error, 0)
 

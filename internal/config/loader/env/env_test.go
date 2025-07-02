@@ -23,7 +23,7 @@ func TestEnvLoader_Load(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "local", cfg.App.Env)
-	assert.Equal(t, ":8080", cfg.HTTP.Address)
+	assert.Equal(t, ":8080", cfg.HTTP.Port)
 	assert.Equal(t, "5432", cfg.Storage.Port)
 	assert.Equal(t, "mydb", cfg.Storage.Name)
 

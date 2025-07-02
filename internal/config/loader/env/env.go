@@ -88,7 +88,7 @@ func loadHTTPConfig() (*http.Config, error) {
 	}
 
 	return &http.Config{
-		Address:     port,
+		Port:        port,
 		Timeout:     timeout,
 		IdleTimeout: idleTimeout,
 	}, nil

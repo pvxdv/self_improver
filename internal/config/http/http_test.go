@@ -17,7 +17,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				Address:     ":8080",
+				Port:        ":8080",
 				Timeout:     5 * time.Second,
 				IdleTimeout: 120 * time.Second,
 			},
@@ -26,18 +26,18 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "empty address",
 			config: Config{
-				Address:     "",
+				Port:        "",
 				Timeout:     5 * time.Second,
 				IdleTimeout: 120 * time.Second,
 			},
 			wantErrors: []string{
-				errEmptyAddress,
+				errEmptyPort,
 			},
 		},
 		{
 			name: "timeout too small",
 			config: Config{
-				Address:     ":8080",
+				Port:        ":8080",
 				Timeout:     5 * time.Millisecond,
 				IdleTimeout: 120 * time.Second,
 			},
@@ -48,7 +48,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "timeout too large",
 			config: Config{
-				Address:     ":8080",
+				Port:        ":8080",
 				Timeout:     6 * time.Second,
 				IdleTimeout: 120 * time.Second,
 			},
@@ -59,7 +59,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "idle timeout too small",
 			config: Config{
-				Address:     ":8080",
+				Port:        ":8080",
 				Timeout:     5 * time.Second,
 				IdleTimeout: 30 * time.Second,
 			},
@@ -70,7 +70,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "idle timeout too large",
 			config: Config{
-				Address:     ":8080",
+				Port:        ":8080",
 				Timeout:     5 * time.Second,
 				IdleTimeout: 400 * time.Second,
 			},
@@ -81,12 +81,12 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "multiple errors",
 			config: Config{
-				Address:     "",
+				Port:        "",
 				Timeout:     1 * time.Millisecond,
 				IdleTimeout: 10 * time.Second,
 			},
 			wantErrors: []string{
-				errEmptyAddress,
+				errEmptyPort,
 				errInvalidTimeout,
 				errInvalidIdleTimeout,
 			},

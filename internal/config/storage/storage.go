@@ -21,6 +21,28 @@ type Config struct {
 	Name     string
 }
 
+func (c *Config) String() string {
+	const mask = "xxxxx"
+
+	user := c.User
+	if user != "" {
+		user = mask
+	}
+
+	pass := c.Password
+	if pass != "" {
+		pass = mask
+	}
+
+	return fmt.Sprintf(
+		"{Host: %s, Port: %s, User: %s, Password: %s, Name: %s}",
+		c.Host,
+		c.Port,
+		user,
+		pass,
+		c.Name)
+}
+
 func (c *Config) Validate() []error {
 	errs := make([]error, 0)
 
