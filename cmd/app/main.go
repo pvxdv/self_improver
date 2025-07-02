@@ -15,10 +15,12 @@ import (
 	"syscall"
 	"time"
 
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/pvxdv/self_improver/internal/config"
+	"github.com/pvxdv/self_improver/internal/config/app"
 	"github.com/pvxdv/self_improver/internal/config/loader/env"
 	"github.com/pvxdv/self_improver/internal/http-server/handlers/health"
 	challengeAdd "github.com/pvxdv/self_improver/internal/http-server/handlers/url/challenge/add"
@@ -28,6 +30,22 @@ import (
 	"github.com/pvxdv/self_improver/internal/storage/postgres"
 )
 
+// @title Self Improver API
+// @version 0.0.0
+
+// @description Available in local/dev environments only.
+// @description This API allows users to track personal improvement challenges and trends.
+// @description It provides endpoints for:
+// @description - Creating and deleting trends
+// @description - Adding challenges to trends
+// @description - Fetching trend data with associated challenges
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @BasePath /
+// @schemes http https
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -38,7 +56,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	consoleLogger, err := setUpLogger(cfg)
+	consoleLogger, err := setUpLogger(cfg.App)
 	if err != nil {
 		log.Fatalf("failed to create logger: %v", err)
 	}
@@ -47,7 +65,7 @@ func main() {
 	consoleLogger.Debugf("config: %+v", cfg)
 	fmt.Print()
 
-	strg, err := postgres.New(ctx, cfg.Storage, consoleLogger)
+	storage, err := postgres.New(ctx, cfg.Storage, consoleLogger)
 	if err != nil {
 		consoleLogger.Fatalf("failed to initialize storage: %v", err)
 	}
@@ -56,15 +74,25 @@ func main() {
 		if err != nil {
 			consoleLogger.Errorf("failed to close storage: %v", err)
 		}
-	}(strg, ctx)
+	}(storage, ctx)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("api/v1/challenge/add", challengeAdd.New(ctx, strg, consoleLogger))
-	mux.HandleFunc("api/v1/trend/add", trendAdd.New(ctx, strg, consoleLogger))
-	mux.HandleFunc("api/v1/trend/get", trendGet.New(ctx, strg, consoleLogger))
-	mux.HandleFunc("api/v1/trend/delete", trendDelete.New(ctx, strg, consoleLogger))
+	mux.HandleFunc("GET /health", health.New(consoleLogger))
 
-	mux.HandleFunc("/health", health.New(consoleLogger))
+	mux.HandleFunc("POST /api/v1/challenge/add", challengeAdd.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("POST /api/v1/trend/add", trendAdd.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("GET /api/v1/trend/get", trendGet.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("DELETE /api/v1/trend/delete", trendDelete.New(ctx, storage, consoleLogger))
+
+	if cfg.App.Env == "local" || cfg.App.Env == "dev" {
+		mux.Handle("/swagger/", httpSwagger.Handler(
+			httpSwagger.URL("doc.json"),
+		))
+
+		mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, "./docs/swagger.json")
+		})
+	}
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTP.Port,
@@ -90,7 +118,7 @@ func main() {
 	}
 }
 
-func setUpLogger(cfg *config.Config) (*zap.SugaredLogger, error) {
+func setUpLogger(cfg *app.Config) (*zap.SugaredLogger, error) {
 	logConfig := zap.NewProductionConfig()
 
 	logConfig.EncoderConfig.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
@@ -98,7 +126,7 @@ func setUpLogger(cfg *config.Config) (*zap.SugaredLogger, error) {
 	}
 	logConfig.Encoding = "json"
 
-	switch cfg.App.Debug {
+	switch cfg.Debug {
 	case true:
 		logConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	case false:

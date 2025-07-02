@@ -9,6 +9,13 @@ import (
 	"github.com/pvxdv/self_improver/internal/lib/api/response"
 )
 
+// New
+// @Summary Health check
+// @Description Check if service is up and running
+// @Tags health
+// @Produce json
+// @Success 200 {object} response.Response
+// @Router /health [get]
 func New(log *zap.SugaredLogger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

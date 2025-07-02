@@ -3,16 +3,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - BUILD_ENV=${BUILD_ENV:-local} # prod/dev/local (default_value:local)
     ports:
       - "8080:8080"
     environment:
-      - APP_ENV=local
+      #app config
+      - APP_ENV=${BUILD_ENV:-local} # prod/dev/local (default_value:local)
       - APP_DEBUG=true
-
+      #http config
       - HTTP_PORT=8080
       - TIMEOUT=5s
       - IDLE_TIMEOUT=60s
-
+      #postgres config
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres

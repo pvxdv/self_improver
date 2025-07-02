@@ -7,9 +7,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// Response
+// @Description Response is the standard API response structure.
+// @Description Used for success and error responses.
 type Response struct {
-	Status string `json:"status"`
-	Error  string `json:"error,omitempty"`
+	Status string `json:"status" example:"Error"`
+	Error  string `json:"error,omitempty" example:"failed to..."`
 }
 
 const (
