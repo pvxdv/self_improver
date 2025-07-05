@@ -24,6 +24,11 @@ import (
 	"github.com/pvxdv/self_improver/internal/config/loader/env"
 	"github.com/pvxdv/self_improver/internal/http-server/handlers/health"
 	challengeAdd "github.com/pvxdv/self_improver/internal/http-server/handlers/url/challenge/add"
+	debtAdd "github.com/pvxdv/self_improver/internal/http-server/handlers/url/finance/debt/add"
+	debtDelete "github.com/pvxdv/self_improver/internal/http-server/handlers/url/finance/debt/delete"
+	debtGet "github.com/pvxdv/self_improver/internal/http-server/handlers/url/finance/debt/get"
+	debtPay "github.com/pvxdv/self_improver/internal/http-server/handlers/url/finance/debt/pay"
+	debtUpdate "github.com/pvxdv/self_improver/internal/http-server/handlers/url/finance/debt/update"
 	trendAdd "github.com/pvxdv/self_improver/internal/http-server/handlers/url/trend/add"
 	trendDelete "github.com/pvxdv/self_improver/internal/http-server/handlers/url/trend/delete"
 	trendGet "github.com/pvxdv/self_improver/internal/http-server/handlers/url/trend/get"
@@ -83,6 +88,12 @@ func main() {
 	mux.HandleFunc("POST /api/v1/trend/add", trendAdd.New(ctx, storage, consoleLogger))
 	mux.HandleFunc("GET /api/v1/trend/get", trendGet.New(ctx, storage, consoleLogger))
 	mux.HandleFunc("DELETE /api/v1/trend/delete", trendDelete.New(ctx, storage, consoleLogger))
+
+	mux.HandleFunc("POST /api/v1/finance/debt/add", debtAdd.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("DELETE /api/v1/finance/debt/delete", debtDelete.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("GET /api/v1/finance/debt/get", debtGet.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("POST /api/v1/finance/debt/pay", debtPay.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("PUT /api/v1/finance/debt/update", debtUpdate.New(ctx, storage, consoleLogger))
 
 	if cfg.App.Env == "local" || cfg.App.Env == "dev" {
 		mux.Handle("/swagger/", httpSwagger.Handler(
