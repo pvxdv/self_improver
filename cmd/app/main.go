@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	telegram "github.com/pvxdv/self_improver/internal/telegram/bot"
 	"log"
 	"net/http"
 	"os/signal"
@@ -32,6 +33,7 @@ import (
 	trendAdd "github.com/pvxdv/self_improver/internal/http-server/handlers/url/trend/add"
 	trendDelete "github.com/pvxdv/self_improver/internal/http-server/handlers/url/trend/delete"
 	trendGet "github.com/pvxdv/self_improver/internal/http-server/handlers/url/trend/get"
+	debtService "github.com/pvxdv/self_improver/internal/service/finance/debt"
 	"github.com/pvxdv/self_improver/internal/storage/postgres"
 )
 
@@ -81,6 +83,8 @@ func main() {
 		}
 	}(storage, ctx)
 
+	debtSrvc := debtService.NewDebtService(storage, consoleLogger)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health.New(consoleLogger))
 
@@ -89,11 +93,11 @@ func main() {
 	mux.HandleFunc("GET /api/v1/trend/get", trendGet.New(ctx, storage, consoleLogger))
 	mux.HandleFunc("DELETE /api/v1/trend/delete", trendDelete.New(ctx, storage, consoleLogger))
 
-	mux.HandleFunc("POST /api/v1/finance/debt/add", debtAdd.New(ctx, storage, consoleLogger))
-	mux.HandleFunc("DELETE /api/v1/finance/debt/delete", debtDelete.New(ctx, storage, consoleLogger))
-	mux.HandleFunc("GET /api/v1/finance/debt/get", debtGet.New(ctx, storage, consoleLogger))
-	mux.HandleFunc("POST /api/v1/finance/debt/pay", debtPay.New(ctx, storage, consoleLogger))
-	mux.HandleFunc("PUT /api/v1/finance/debt/update", debtUpdate.New(ctx, storage, consoleLogger))
+	mux.HandleFunc("POST /api/v1/finance/debt/add", debtAdd.New(ctx, debtSrvc, consoleLogger))
+	mux.HandleFunc("DELETE /api/v1/finance/debt/delete", debtDelete.New(ctx, debtSrvc, consoleLogger))
+	mux.HandleFunc("GET /api/v1/finance/debt/get", debtGet.New(ctx, debtSrvc, consoleLogger))
+	mux.HandleFunc("POST /api/v1/finance/debt/pay", debtPay.New(ctx, debtSrvc, consoleLogger))
+	mux.HandleFunc("PUT /api/v1/finance/debt/update", debtUpdate.New(ctx, debtSrvc, consoleLogger))
 
 	if cfg.App.Env == "local" || cfg.App.Env == "dev" {
 		mux.Handle("/swagger/", httpSwagger.Handler(
@@ -116,6 +120,19 @@ func main() {
 			if !errors.Is(err, http.ErrServerClosed) {
 				consoleLogger.Errorf("failed to start http server: %v", err)
 			}
+		}
+	}()
+
+	bot, err := telegram.New(ctx, cfg.Telegram, consoleLogger, debtSrvc)
+	if err != nil {
+		consoleLogger.Fatalf("failed to create bot: %v", err)
+	}
+
+	go func() {
+		consoleLogger.Infof("starting telegram bot")
+		err = bot.Start()
+		if err != nil {
+			consoleLogger.Infof("stoping telergam bot: %v", err)
 		}
 	}()
 

@@ -1,6 +1,7 @@
 package env
 
 import (
+	"github.com/pvxdv/self_improver/internal/config/telegram"
 	"os"
 	"strconv"
 	"time"
@@ -24,6 +25,9 @@ const (
 	DBUserKey     = "DB_USER"
 	DBPasswordKey = "DB_PASSWORD"
 	DBNameKey     = "DB_NAME"
+
+	TToken    = "TELEGRAM_TOKEN"
+	TPassword = "TELEGRAM_PASSWORD"
 )
 
 type LoaderEnv struct{}
@@ -48,10 +52,16 @@ func (l *LoaderEnv) Load() (*config.Config, error) {
 		return nil, err
 	}
 
+	tCfg, err := loadTelegramConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	return &config.Config{
-		App:     appCfg,
-		HTTP:    httpCfg,
-		Storage: dbCfg,
+		App:      appCfg,
+		HTTP:     httpCfg,
+		Storage:  dbCfg,
+		Telegram: tCfg,
 	}, nil
 }
 
@@ -107,5 +117,14 @@ func loadDatabaseConfig() (*storage.Config, error) {
 		User:     user,
 		Password: password,
 		Name:     name,
+	}, nil
+}
+
+func loadTelegramConfig() (*telegram.Config, error) {
+	token := os.Getenv(TToken)
+	pass := os.Getenv(TPassword)
+
+	return &telegram.Config{
+		Token: token, Password: pass,
 	}, nil
 }

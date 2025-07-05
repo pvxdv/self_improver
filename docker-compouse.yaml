@@ -10,7 +10,7 @@ services:
     environment:
       #app config
       - APP_ENV=${BUILD_ENV:-local} # prod/dev/local (default_value:local)
-      - APP_DEBUG=true
+      - APP_DEBUG=false
       #http config
       - HTTP_PORT=8080
       - TIMEOUT=5s
@@ -21,6 +21,9 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=password
       - DB_NAME=self_improver
+      #telegram
+      - TELEGRAM_TOKEN=${T_TOKEN}
+      - TELEGRAM_PASSWORD=${T_PASS}
     depends_on:
       db:
         condition: service_healthy

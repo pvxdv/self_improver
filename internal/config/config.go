@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/pvxdv/self_improver/internal/config/telegram"
 	"reflect"
 	"strings"
 
@@ -11,9 +12,10 @@ import (
 )
 
 type Config struct {
-	App     *app.Config
-	HTTP    *http.Config
-	Storage *storage.Config
+	App      *app.Config
+	HTTP     *http.Config
+	Storage  *storage.Config
+	Telegram *telegram.Config
 }
 
 type Loader interface {

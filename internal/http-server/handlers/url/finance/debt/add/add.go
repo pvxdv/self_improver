@@ -13,7 +13,7 @@ import (
 )
 
 type DeptAdder interface {
-	AddDebt(ctx context.Context, data *model.Debt) (int64, error)
+	AddDebt(ctx context.Context, data *model.Debt) error
 }
 
 // New
@@ -46,16 +46,12 @@ func New(ctx context.Context, adder DeptAdder, logger *zap.SugaredLogger) http.H
 
 		logger.Debugf("resived debt to save:%v", debt)
 
-		//TODO validate
-
-		id, err := adder.AddDebt(ctx, &debt)
+		err = adder.AddDebt(ctx, &debt)
 		if err != nil {
-			logger.Errorf("failed to save debt: %v", err)
-			response.RespondWithError(w, http.StatusInternalServerError, "failed to save debt", logger)
+			response.RespondWithError(w, http.StatusInternalServerError, err.Error(), logger)
 			return
 		}
 
-		logger.Infof("debt (ID:%d) saved successfully", id)
 		response.RespondWithJSON(w, http.StatusOK, response.OK(), logger)
 	}
 }

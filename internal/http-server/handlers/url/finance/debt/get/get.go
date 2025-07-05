@@ -37,7 +37,6 @@ func New(ctx context.Context, getter DebtGetter, logger *zap.SugaredLogger) http
 			return
 		}
 
-		logger.Info("successfully retrieved amount debt")
 		response.RespondWithJSON(w, http.StatusOK, result, logger)
 	}
 }

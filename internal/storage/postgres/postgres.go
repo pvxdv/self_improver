@@ -288,7 +288,7 @@ func (s *Storage) AddDebt(ctx context.Context, debt *model.Debt) (int64, error) 
 	return debtID, nil
 }
 
-func (s *Storage) GetDebt(ctx context.Context, id int) (model.Debt, error) {
+func (s *Storage) GetDebt(ctx context.Context, id int64) (model.Debt, error) {
 	var debt model.Debt
 
 	err := s.db.QueryRow(ctx,

@@ -3,7 +3,6 @@ package update
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 
@@ -11,7 +10,6 @@ import (
 
 	"github.com/pvxdv/self_improver/internal/lib/api/response"
 	"github.com/pvxdv/self_improver/internal/model"
-	"github.com/pvxdv/self_improver/internal/storage"
 )
 
 type DebtUpdater interface {
@@ -51,22 +49,12 @@ func New(ctx context.Context, updater DebtUpdater, logger *zap.SugaredLogger) ht
 
 		logger.Debugf("resived debt to update:%v", debt)
 
-		//TODO validate
-
 		err = updater.UpdateDebt(ctx, debt)
 		if err != nil {
-			if errors.Is(storage.ErrDebtNotFound, err) {
-				logger.Warnf("debt not found: %v", err)
-				response.RespondWithError(w, http.StatusNotFound, "debt not found", logger)
-				return
-			}
-
-			logger.Errorf("failed to update debt: %v", err)
-			response.RespondWithError(w, http.StatusInternalServerError, "failed to update debt", logger)
+			response.RespondWithError(w, http.StatusInternalServerError, err.Error(), logger)
 			return
 		}
 
-		logger.Infof("debt (ID:%d) updated successfully", debt.ID)
 		response.RespondWithJSON(w, http.StatusOK, response.OK(), logger)
 	}
 }

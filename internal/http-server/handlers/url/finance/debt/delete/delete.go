@@ -2,14 +2,12 @@ package delete
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"go.uber.org/zap"
 
 	"github.com/pvxdv/self_improver/internal/lib/api/response"
-	"github.com/pvxdv/self_improver/internal/storage"
 )
 
 type DebtDeleter interface {
@@ -43,18 +41,10 @@ func New(ctx context.Context, deleter DebtDeleter, logger *zap.SugaredLogger) ht
 
 		err = deleter.DeleteDebt(ctx, int64(id))
 		if err != nil {
-			logger.Errorf("failed to delete debt: %v", err)
-
-			if errors.Is(storage.ErrDebtNotFound, err) {
-				response.RespondWithError(w, http.StatusInternalServerError, err.Error(), logger)
-				return
-			}
-
 			response.RespondWithError(w, http.StatusInternalServerError, "failed to delete debt", logger)
 			return
 		}
 
-		logger.Infof("debt (ID:%d) deleted successfully", id)
 		response.RespondWithJSON(w, http.StatusOK, response.OK(), logger)
 	}
 }

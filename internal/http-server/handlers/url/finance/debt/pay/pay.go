@@ -2,22 +2,16 @@ package delete
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"go.uber.org/zap"
 
 	"github.com/pvxdv/self_improver/internal/lib/api/response"
-	"github.com/pvxdv/self_improver/internal/model"
-	"github.com/pvxdv/self_improver/internal/storage"
 )
 
 type DebtPayer interface {
-	GetDebt(ctx context.Context, id int) (model.Debt, error)
-	UpdateDebt(ctx context.Context, debt model.Debt) error
-	DeleteDebt(ctx context.Context, id int64) error
+	PayDebt(ctx context.Context, id int64, amount int64) error
 }
 
 // New
@@ -67,46 +61,12 @@ func New(ctx context.Context, payer DebtPayer, logger *zap.SugaredLogger) http.H
 			return
 		}
 
-		debt, err := payer.GetDebt(ctx, id)
+		err = payer.PayDebt(ctx, int64(id), int64(amount))
 		if err != nil {
-			if errors.Is(storage.ErrDebtNotFound, err) {
-				logger.Warnf("debt not found: %v", err)
-				response.RespondWithError(w, http.StatusNotFound, "debt not found", logger)
-				return
-			}
-
-			logger.Errorf("failed to get debt: %v", err)
 			response.RespondWithError(w, http.StatusInternalServerError, "failed to retrieve debt", logger)
 			return
 		}
 
-		newAmount := debt.Amount - int64(amount)
-
-		switch {
-		case newAmount < 0:
-			msg := fmt.Sprintf("payment amount exceeds debt. Maximum payment: %d", debt.Amount)
-			logger.Warn(msg)
-			response.RespondWithError(w, http.StatusConflict, msg, logger)
-			return
-
-		case newAmount > 0:
-			debt.Amount = newAmount
-			if err = payer.UpdateDebt(ctx, debt); err != nil {
-				logger.Errorf("failed to update debt: %v", err)
-				response.RespondWithError(w, http.StatusInternalServerError, "failed to update debt", logger)
-				return
-			}
-			logger.Infof("debt partially paid. ID: %d, Remaining amount: %d", id, newAmount)
-			response.RespondWithJSON(w, http.StatusOK, response.OK(), logger)
-
-		case newAmount == 0:
-			if err = payer.DeleteDebt(ctx, int64(id)); err != nil {
-				logger.Errorf("failed to delete debt: %v", err)
-				response.RespondWithError(w, http.StatusInternalServerError, "failed to delete debt", logger)
-				return
-			}
-			logger.Infof("debt fully paid and deleted. ID: %d", id)
-			response.RespondWithJSON(w, http.StatusOK, response.OK(), logger)
-		}
+		response.RespondWithJSON(w, http.StatusOK, response.OK(), logger)
 	}
 }
