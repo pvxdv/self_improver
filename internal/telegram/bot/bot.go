@@ -8,6 +8,26 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	emojiSuccess  = "✅"
+	emojiFailed   = "❌"
+	emojiInfo     = "ℹ️"
+	emojiMoney    = "💰"
+	emojiId       = "📌"
+	emojiAuth     = "🔐"
+	emojiTrends   = "📈"
+	emojiDebts    = "💸"
+	emojiWarning  = "⚠️"
+	emojiPoint    = "🔹"
+	emojiCalendar = "📅"
+
+	emojiActionAdd    = "🆕"
+	emojiActionBack   = "🔙"
+	emojiActionPay    = "💳"
+	emojiActionEdit   = "⚙️"
+	emojiActionDelete = "🗑"
+)
+
 type Bot struct {
 	api         *tgbotapi.BotAPI
 	serviceDebt *debt.ServiceDebt
@@ -57,40 +77,36 @@ func (b *Bot) Start() error {
 	}
 }
 
+func (b *Bot) IsPassValid(pass string) bool {
+	return b.password == pass
+}
+
+func (b *Bot) Send(msg tgbotapi.Chattable) {
+	b.logger.Debugf("Sending message: %+v", msg)
+	_, err := b.api.Send(msg)
+	b.logger.Warnf("Failed to send message: %+v", err)
+}
+
 func (b *Bot) handleUpdate(update tgbotapi.Update) {
-	if update.Message == nil {
+	if update.Message != nil {
+		b.handleIncomingMessage(update.Message)
 		return
 	}
 
-	chatID := update.Message.Chat.ID
+	if update.CallbackQuery != nil {
+		b.handleCallbackQuery(update.CallbackQuery)
+	}
+}
+
+func (b *Bot) getUserState(chatID int64) *UserState {
 	state, ok := b.userStates[chatID]
 	if !ok {
-		state = &UserState{TempData: make(map[string]interface{})}
+		state = &UserState{
+			AuthPassed:     false,
+			ExpectedAction: "",
+			TempData:       make(map[string]interface{}),
+		}
 		b.userStates[chatID] = state
 	}
-
-	if !state.AuthPassed {
-		HandleAuth(b, chatID, update.Message.Text, state)
-		return
-	}
-
-	switch update.Message.Text {
-	case "Debts":
-		b.showDebtMenu(chatID)
-	case "Trends":
-		b.showTrendPlaceholder(chatID)
-	case "Back":
-		b.showMainMenu(chatID)
-	default:
-		ProcessDebtActions(b, chatID, update.Message.Text, state)
-	}
-}
-
-func (b *Bot) IsPassValid(pass string) bool {
-	return b.password != pass
-}
-
-func (b *Bot) Send(msg tgbotapi.Chattable) error {
-	_, err := b.api.Send(msg)
-	return err
+	return state
 }

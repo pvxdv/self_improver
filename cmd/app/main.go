@@ -152,7 +152,15 @@ func setUpLogger(cfg *app.Config) (*zap.SugaredLogger, error) {
 	logConfig.EncoderConfig.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 		enc.AppendString(t.Format(time.RFC1123))
 	}
-	logConfig.Encoding = "json"
+
+	switch cfg.Env {
+	case "local":
+		logConfig.Encoding = "console"
+	case "dev":
+		logConfig.Encoding = "console"
+	case "prod":
+		logConfig.Encoding = "json"
+	}
 
 	switch cfg.Debug {
 	case true:

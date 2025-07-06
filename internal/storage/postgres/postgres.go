@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -12,26 +13,6 @@ import (
 	storageCfg "github.com/pvxdv/self_improver/internal/config/storage"
 	"github.com/pvxdv/self_improver/internal/model"
 	"github.com/pvxdv/self_improver/internal/storage"
-)
-
-const (
-	createTableTrendSQL = `CREATE TABLE IF NOT EXISTS trend (
-		id SERIAL PRIMARY KEY,
-		name VARCHAR(255) NOT NULL UNIQUE)`
-
-	createTableChallengeSQL = `CREATE TABLE IF NOT EXISTS challenge (
-		id SERIAL PRIMARY KEY,
-		trend_id INTEGER NOT NULL REFERENCES trend(id) ON DELETE CASCADE,
-		description VARCHAR(1000) NOT NULL,
-		start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        end_date TIMESTAMP)`
-
-	createTableDebtSQL = `CREATE TABLE IF NOT EXISTS debt (
-		id SERIAL PRIMARY KEY,
-		description VARCHAR(1000),
-		amount INTEGER NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`
 )
 
 type Storage struct {
@@ -50,21 +31,6 @@ func New(ctx context.Context, cfg *storageCfg.Config, logger *zap.SugaredLogger)
 	if err := conn.Ping(ctx); err != nil {
 		conn.Close(ctx)
 		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	if _, err = conn.Exec(ctx, createTableTrendSQL); err != nil {
-		conn.Close(ctx)
-		return nil, fmt.Errorf("failed to create cluster table: %w", err)
-	}
-
-	if _, err = conn.Exec(ctx, createTableChallengeSQL); err != nil {
-		conn.Close(ctx)
-		return nil, fmt.Errorf("failed to create container table: %w", err)
-	}
-
-	if _, err = conn.Exec(ctx, createTableDebtSQL); err != nil {
-		conn.Close(ctx)
-		return nil, fmt.Errorf("failed to create debt table: %w", err)
 	}
 
 	return &Storage{db: conn, logger: logger}, nil
@@ -264,11 +230,12 @@ func (s *Storage) AddDebt(ctx context.Context, debt *model.Debt) (int64, error) 
 
 	var debtID int64
 	err = tx.QueryRow(ctx,
-		`INSERT INTO debt (description, amount)
-		 VALUES ($1, $2)
+		`INSERT INTO debt (description, amount, return_date)
+		 VALUES ($1, $2, $3)
 		 RETURNING id`,
 		debt.Description,
 		debt.Amount,
+		debt.ReturnDate,
 	).Scan(&debtID)
 
 	if err != nil {
@@ -319,10 +286,11 @@ func (s *Storage) UpdateDebt(ctx context.Context, debt model.Debt) error {
 
 	result, err := tx.Exec(ctx,
 		`UPDATE debt 
-		 SET description = $1, amount = $2, updated_at = CURRENT_TIMESTAMP
-		 WHERE id = $3`,
+		 SET description = $1, amount = $2, return_date= $3, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $4`,
 		debt.Description,
 		debt.Amount,
+		debt.ReturnDate,
 		debt.ID,
 	)
 
@@ -396,7 +364,7 @@ func (s *Storage) GetAmountDebt(ctx context.Context) (*model.AmountDebt, error) 
 	}
 
 	rows, err := tx.Query(ctx,
-		"SELECT id, description, amount FROM debt",
+		"SELECT id, description, amount, return_date FROM debt",
 	)
 	if err != nil {
 		s.logger.Errorf("failed to get debt details: %v", err)
@@ -407,10 +375,17 @@ func (s *Storage) GetAmountDebt(ctx context.Context) (*model.AmountDebt, error) 
 	debts := make([]*model.Debt, 0)
 	for rows.Next() {
 		var d model.Debt
-		if err := rows.Scan(&d.ID, &d.Description, &d.Amount); err != nil {
+		var date sql.NullTime
+
+		if err := rows.Scan(&d.ID, &d.Description, &d.Amount, &date); err != nil {
 			s.logger.Warnf("failed to scan debt row: %v", err)
 			continue
 		}
+
+		if date.Valid {
+			d.ReturnDate = &date.Time
+		}
+
 		debts = append(debts, &d)
 	}
 

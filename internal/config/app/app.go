@@ -35,9 +35,9 @@ func (c *Config) Validate() []error {
 		errs = append(errs, fmt.Errorf(errInvalidEnv))
 	}
 
-	if c.Env == envProd && c.Debug {
-		errs = append(errs, fmt.Errorf(errProdDebug))
-	}
+	//if c.Env == envProd && c.Debug {
+	//	errs = append(errs, fmt.Errorf(errProdDebug))
+	//}
 
 	return errs
 }

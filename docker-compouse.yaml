@@ -5,22 +5,23 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILD_ENV=${BUILD_ENV:-local} # prod/dev/local (default_value:local)
+    image: self_improver-app
     ports:
       - "8080:8080"
     environment:
       #app config
       - APP_ENV=${BUILD_ENV:-local} # prod/dev/local (default_value:local)
-      - APP_DEBUG=false
+      - APP_DEBUG=${APP_DEBUG}
       #http config
-      - HTTP_PORT=8080
-      - TIMEOUT=5s
-      - IDLE_TIMEOUT=60s
+      - HTTP_PORT=${HTTP_PORT}
+      - TIMEOUT=${HTTP_TIMEOUT}
+      - IDLE_TIMEOUT=${HTTP_IDLE_TIMEOUT}
       #postgres config
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=password
-      - DB_NAME=self_improver
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASS}
+      - DB_NAME=${DB_NAME}
       #telegram
       - TELEGRAM_TOKEN=${T_TOKEN}
       - TELEGRAM_PASSWORD=${T_PASS}
@@ -28,12 +29,24 @@ services:
       db:
         condition: service_healthy
 
+  migrations:
+    image: self_improver-app
+    command: [ "goose", "up" ]
+    environment:
+      GOOSE_DRIVER: ${DB_DRIVER}
+      GOOSE_DBSTRING: ${DB_DRIVER}://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
+      GOOSE_MIGRATION_DIR: /app/migrations
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   db:
     image: postgres:16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: self_improver
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
