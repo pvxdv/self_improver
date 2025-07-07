@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -22,10 +23,55 @@ const (
 	CallbackConfirmDelete     = "confirm_delete"
 	CallbackCancelDelete      = "cancel_delete"
 	CallbackUpdateReturnDate  = "update_return_date"
+
+	CalendarPrefix   = "calendar_"
+	CallbackSetYear  = "calendar_set_year"
+	CallbackSetMonth = "calendar_set_month"
+	CallbackSetDay   = "calendar_set_day"
 )
 
-func CallbackWithData(prefix string, id int64) string {
-	return fmt.Sprintf("%s:%d", prefix, id)
+//func CallbackWithData(prefix string, id int64) string {
+//	return fmt.Sprintf("%s:%d", prefix, id)
+//}
+
+func CallbackWithData(prefix string, ids ...int64) string {
+	data := prefix
+	for _, id := range ids {
+		data += fmt.Sprintf(":%d", id)
+	}
+	return data
+}
+
+func ParseCallbackData(data string) (string, int64, error) {
+	parts := strings.SplitN(data, ":", 2)
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("invalid callback data: %s", data)
+	}
+
+	id, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid callback data: %s", data)
+	}
+
+	return parts[0], id, err
+}
+
+func ParseCalendarCallback(data string) (string, []int64, error) {
+	parts := strings.Split(data, ":")
+	if len(parts) < 2 {
+		return "", nil, fmt.Errorf("invalid calendar callback")
+	}
+
+	var nums []int64
+	for _, part := range parts[1:] {
+		num, err := strconv.ParseInt(part, 10, 64)
+		if err != nil {
+			return "", nil, err
+		}
+		nums = append(nums, num)
+	}
+
+	return parts[0], nums, nil
 }
 
 func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery) {
@@ -37,7 +83,7 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery) {
 	}
 
 	state := b.getUserState(chatID)
-	b.logger.Debug("Processing callback: %s", callbackData)
+	b.logger.Debug("Processing callback:", callbackData)
 
 	if callback.Data != CallbackAuthorize && !state.AuthPassed {
 		b.handleAuth(chatID, "", state)
@@ -55,66 +101,41 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery) {
 		state.ExpectedAction = "add_debt_amount"
 		state.TempData = make(map[string]interface{})
 
-		b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" enter debt amount:"))
+		err := b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" enter debt amount:"))
+		b.logger.Warnf("Failed to send message: %+v", err)
 		return
 	case CallbackAuthorize:
 		state.ExpectedAction = "await_password"
 
-		b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" enter your password:"))
+		err := b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" enter your password:"))
+		b.logger.Warnf("Failed to send message: %+v", err)
 		return
 	case CallbackTrends:
-		b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" feature is not implemented yet"))
+		err := b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" feature is not implemented yet"))
+		b.logger.Warnf("Failed to send message: %+v", err)
 		return
 	case CallbackCancelDelete:
-		b.Send(tgbotapi.NewMessage(chatID, emojiActionDelete+" deletion cancelled"))
-
+		err := b.Send(tgbotapi.NewMessage(chatID, emojiActionDelete+" deletion cancelled"))
+		b.logger.Warnf("Failed to send message: %+v", err)
 		b.showDebtMenu(chatID)
 		return
 	default:
 
 	}
 
-	parts := strings.SplitN(callbackData, ":", 2)
-	if len(parts) != 2 {
-		b.logger.Warnf("Invalid callback format: %s", callbackData)
-
-		b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" invalid command format. Please try again."))
+	if strings.HasPrefix(callbackData, CalendarPrefix) {
+		b.handleCalendarCallback(callbackData, chatID, state)
 		return
 	}
 
-	prefix := parts[0]
-	idStr := parts[1]
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	prefix, id, err := ParseCallbackData(callbackData)
 	if err != nil {
-		b.logger.Warnf("Invalid ID in callback: %s", idStr)
-
-		b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" invalid ID format. Please try again."))
+		err = b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" invalid command format. Please try again."))
+		b.logger.Warnf("Failed to send message: %+v", err)
 		return
 	}
 
 	switch prefix {
-	case CallbackUpdateReturnDate:
-		state.ExpectedAction = "update_debt_return_date"
-		state.TempData["debt_id"] = id
-
-		debt, err := b.serviceDebt.GetDebt(b.ctx, id)
-		if err != nil {
-			b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" Debt not found."))
-			return
-		}
-
-		currentDate := "Not set"
-		if debt.ReturnDate != nil {
-			currentDate = debt.ReturnDate.Format("2006-01-02")
-		}
-
-		msgText := fmt.Sprintf(
-			"%s Current return date: %s\nEnter new date (YYYY-MM-DD), or send /skip to remove it:",
-			emojiCalendar, currentDate,
-		)
-		b.Send(tgbotapi.NewMessage(chatID, msgText))
-
 	case CallbackEditDebt:
 		state.TempData["debt_id"] = id
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -129,63 +150,138 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery) {
 		)
 		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(emojiInfo+" what do you want to update for Debt #%d?", id))
 		msg.ReplyMarkup = keyboard
-		b.Send(msg)
+		err = b.Send(msg)
+		b.logger.Warnf("Failed to send message: %+v", err)
 
 	case CallbackUpdateAmount:
 		state.ExpectedAction = "update_debt_amount"
 		state.TempData["debt_id"] = id
 
-		b.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf(emojiInfo+" enter new amount for Debt #%d:", id)))
+		err = b.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf(emojiInfo+" enter new amount for Debt #%d:", id)))
+		b.logger.Warnf("Failed to send message: %+v", err)
 
 	case CallbackUpdateDescription:
 		state.ExpectedAction = "update_debt_description"
 		state.TempData["debt_id"] = id
 
-		b.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf(emojiInfo+" enter new description for Debt #%d:", id)))
+		err = b.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf(emojiInfo+" enter new description for Debt #%d:", id)))
+		b.logger.Warnf("Failed to send message: %+v", err)
 
 	case CallbackPayDebt:
 		state.ExpectedAction = "pay_debt_amount"
 		state.TempData["debt_id"] = id
 
-		b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" enter payment amount:"))
+		err = b.Send(tgbotapi.NewMessage(chatID, emojiInfo+" enter payment amount:"))
+		b.logger.Warnf("Failed to send message: %+v", err)
 
 	case CallbackDeleteDebt:
 		debt, err := b.serviceDebt.GetDebt(b.ctx, id)
 		if err != nil {
-			b.Send(tgbotapi.NewMessage(chatID, emojiFailed+"️ error: Debt not found"))
+			err = b.Send(tgbotapi.NewMessage(chatID, emojiFailed+"️ error: Debt not found"))
+			b.logger.Warnf("Failed to send message: %+v", err)
 			return
 		}
 
 		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
-			emojiWarning+"️ Confirm Deletion\n\n"+
-				"You're about to delete:\n\n"+
+			emojiWarning+"️ Confirm Deletion, this cannot be undone!\n\n"+
+				"To delete:\n\n"+
 				emojiPoint+" "+emojiId+": %d\n"+
 				emojiPoint+" "+emojiInfo+": %s\n"+
-				emojiPoint+" "+emojiMoney+": %s\n\n"+
-				"This cannot be undone!",
-			id, debt.Description, formatAmount(debt.Amount)))
+				emojiPoint+" "+emojiMoney+": %s\n\n",
+			id, debt.Description, b.formatAmount(debt.Amount)))
 
 		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData(emojiActionDelete+" delete", fmt.Sprintf("%s:%d", CallbackConfirmDelete, id)),
-				tgbotapi.NewInlineKeyboardButtonData(emojiActionBack+" back", CallbackCancelDelete),
+				tgbotapi.NewInlineKeyboardButtonData(emojiActionDelete, fmt.Sprintf("%s:%d", CallbackConfirmDelete, id)),
+				tgbotapi.NewInlineKeyboardButtonData(emojiActionBack, CallbackCancelDelete),
 			),
 		)
 
-		b.Send(msg)
+		err = b.Send(msg)
+		b.logger.Warnf("Failed to send message: %+v", err)
 
 	case CallbackConfirmDelete:
 		if err := b.serviceDebt.DeleteDebt(b.ctx, id); err != nil {
-			b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" failed to delete debt: "+err.Error()))
+			err = b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" failed to delete debt: "+err.Error()))
+			b.logger.Warnf("Failed to send message: %+v", err)
 		} else {
-			b.Send(tgbotapi.NewMessage(chatID, emojiSuccess+" debt deleted successfully"))
+			err = b.Send(tgbotapi.NewMessage(chatID, emojiSuccess+" debt deleted successfully"))
+			b.logger.Warnf("Failed to send message: %+v", err)
 		}
 
 		b.showDebtMenu(chatID)
 
+	case CallbackUpdateReturnDate:
+		b.showYearPicker(chatID, id)
+
 	default:
 		b.logger.Warnf("Unknown callback prefix: %s", prefix)
 
-		b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" unknown command. Please try again."))
+		err = b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" unknown command. Please try again."))
+		b.logger.Warnf("Failed to send message: %+v", err)
+	}
+
+}
+
+func (b *Bot) handleCalendarCallback(callbackData string, chatID int64, state *UserState) {
+	prefix, nums, err := ParseCalendarCallback(callbackData)
+	if err != nil {
+		err = b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" "+err.Error()))
+		b.logger.Warnf("Failed to send message: %+v", err)
+		return
+	}
+
+	switch prefix {
+	case CallbackSetYear:
+		id := nums[0]
+		year := nums[1]
+
+		b.showMonthPicker(chatID, id, year)
+
+	case CallbackSetMonth:
+		id := nums[0]
+		year := nums[1]
+		month := nums[2]
+
+		b.showDayPicker(chatID, id, year, month)
+
+	case CallbackSetDay:
+		id := nums[0]
+		year := nums[1]
+		month := nums[2]
+		day := nums[3]
+
+		debt, err := b.serviceDebt.GetDebt(b.ctx, id)
+		if err != nil {
+			err = b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" error: "+err.Error()))
+			b.logger.Warnf("Failed to send message: %+v", err)
+			delete(state.TempData, "debt_id")
+			delete(state.TempData, "return_date")
+			state.ExpectedAction = ""
+			return
+		}
+
+		date := time.Date(int(year), time.Month(month), int(day), 0, 0, 0, 0, time.UTC)
+		debt.ReturnDate = &date
+		err = b.serviceDebt.UpdateDebt(b.ctx, debt)
+		if err != nil {
+			err = b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" "+err.Error()))
+			b.logger.Warnf("Failed to send message: %+v", err)
+			delete(state.TempData, "debt_id")
+			delete(state.TempData, "return_date")
+			state.ExpectedAction = ""
+			return
+		}
+
+		delete(state.TempData, "debt_id")
+		delete(state.TempData, "return_date")
+		state.ExpectedAction = ""
+
+		b.showDebtMenu(chatID)
+	default:
+		b.logger.Warnf("Unknown callback: %s", prefix)
+
+		err = b.Send(tgbotapi.NewMessage(chatID, emojiWarning+" unknown command. Please try again."))
+		b.logger.Warnf("Failed to send message: %+v", err)
 	}
 }

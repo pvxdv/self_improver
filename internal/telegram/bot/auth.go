@@ -26,14 +26,19 @@ func (b *Bot) handleAuth(chatID int64, input string, state *UserState) {
 	case "await_password":
 		if !b.IsPassValid(input) {
 			b.logger.Warnf("Invalid password attempt from chat %d", chatID)
-			b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" invalid password. Please try again:"))
+			err := b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" invalid password. Please try again:"))
+			b.logger.Warnf("Failed to send message: %+v", err)
 			return
 		}
 
 		state.AuthPassed = true
 		state.ExpectedAction = ""
+
 		b.logger.Infof("User %d successfully authorized", chatID)
-		b.Send(tgbotapi.NewMessage(chatID, emojiSuccess+" authorization successful!"))
+
+		err := b.Send(tgbotapi.NewMessage(chatID, emojiSuccess+" authorization successful!"))
+		b.logger.Warnf("Failed to send message: %+v", err)
+
 		time.Sleep(1 * time.Second)
 		b.showMainMenu(chatID)
 
@@ -45,6 +50,7 @@ func (b *Bot) handleAuth(chatID int64, input string, state *UserState) {
 				tgbotapi.NewInlineKeyboardButtonData(emojiAuth+" authorize", CallbackAuthorize),
 			),
 		)
-		b.Send(msg)
+		err := b.Send(msg)
+		b.logger.Warnf("Failed to send message: %+v", err)
 	}
 }

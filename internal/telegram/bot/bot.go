@@ -8,26 +8,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	emojiSuccess  = "✅"
-	emojiFailed   = "❌"
-	emojiInfo     = "ℹ️"
-	emojiMoney    = "💰"
-	emojiId       = "📌"
-	emojiAuth     = "🔐"
-	emojiTrends   = "📈"
-	emojiDebts    = "💸"
-	emojiWarning  = "⚠️"
-	emojiPoint    = "🔹"
-	emojiCalendar = "📅"
-
-	emojiActionAdd    = "🆕"
-	emojiActionBack   = "🔙"
-	emojiActionPay    = "💳"
-	emojiActionEdit   = "⚙️"
-	emojiActionDelete = "🗑"
-)
-
 type Bot struct {
 	api         *tgbotapi.BotAPI
 	serviceDebt *debt.ServiceDebt
@@ -81,10 +61,10 @@ func (b *Bot) IsPassValid(pass string) bool {
 	return b.password == pass
 }
 
-func (b *Bot) Send(msg tgbotapi.Chattable) {
+func (b *Bot) Send(msg tgbotapi.Chattable) error {
 	b.logger.Debugf("Sending message: %+v", msg)
 	_, err := b.api.Send(msg)
-	b.logger.Warnf("Failed to send message: %+v", err)
+	return err
 }
 
 func (b *Bot) handleUpdate(update tgbotapi.Update) {

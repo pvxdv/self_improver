@@ -5,6 +5,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"sort"
 	"strings"
+	"time"
 )
 
 func (b *Bot) showMainMenu(chatID int64) {
@@ -19,7 +20,8 @@ func (b *Bot) showMainMenu(chatID int64) {
 
 	msg := tgbotapi.NewMessage(chatID, "Choose module:")
 	msg.ReplyMarkup = keyboard
-	b.Send(msg)
+	err := b.Send(msg)
+	b.logger.Warnf("Failed to send message: %+v", err)
 }
 
 func (b *Bot) showAuthMenu(chatID int64) {
@@ -33,7 +35,8 @@ func (b *Bot) showAuthMenu(chatID int64) {
 
 	msg := tgbotapi.NewMessage(chatID, "Welcome to the bot!\nPlease authorize to continue.")
 	msg.ReplyMarkup = keyboard
-	b.Send(msg)
+	err := b.Send(msg)
+	b.logger.Warnf("Failed to send message: %+v", err)
 }
 
 func (b *Bot) showDebtMenu(chatID int64) {
@@ -42,7 +45,8 @@ func (b *Bot) showDebtMenu(chatID int64) {
 	debts, err := b.serviceDebt.GetAmountDebt(b.ctx)
 	if err != nil {
 		b.logger.Errorf("Error fetching debts: %v", err)
-		b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" error loading debts. Please try later."))
+		err = b.Send(tgbotapi.NewMessage(chatID, emojiFailed+" error loading debts. Please try later."))
+		b.logger.Warnf("Failed to send message: %+v", err)
 		return
 	}
 
@@ -57,7 +61,8 @@ func (b *Bot) showDebtMenu(chatID int64) {
 			),
 		)
 		msg.ReplyMarkup = keyboard
-		b.Send(msg)
+		err = b.Send(msg)
+		b.logger.Warnf("Failed to send message: %+v", err)
 		return
 	}
 
@@ -65,7 +70,7 @@ func (b *Bot) showDebtMenu(chatID int64) {
 		a, b := debts.Details[i], debts.Details[j]
 
 		if a.ReturnDate == nil && b.ReturnDate == nil {
-			return a.ID < b.ID
+			return a.ID > b.ID
 		}
 
 		if a.ReturnDate == nil {
@@ -75,8 +80,52 @@ func (b *Bot) showDebtMenu(chatID int64) {
 			return true
 		}
 
-		return a.ReturnDate.Before(*b.ReturnDate)
+		return a.ReturnDate.After(*b.ReturnDate)
 	})
+
+	for _, debt := range debts.Details {
+		var (
+			messageText  strings.Builder
+			keyboardRows [][]tgbotapi.InlineKeyboardButton
+		)
+
+		daysRemaining := 0
+		if debt.ReturnDate != nil {
+			d1 := debt.ReturnDate.UTC()
+			d2 := time.Now().UTC()
+
+			dif := d1.Sub(d2)
+
+			days := int(dif.Hours() / 24)
+			if days > 0 {
+				daysRemaining = days
+			}
+		}
+
+		messageText.WriteString(fmt.Sprintf(
+			"%s: %s\n%s: %s %s: %s %s: %dd\n\n ",
+			emojiInfo,
+			debt.Description,
+			emojiMoney,
+			b.formatAmount(debt.Amount),
+			emojiCalendar,
+			b.formatDate(debt.ReturnDate),
+			b.getDeadlineIcon(daysRemaining),
+			daysRemaining,
+		))
+
+		keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("pay", CallbackWithData(CallbackPayDebt, debt.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("edit", CallbackWithData(CallbackEditDebt, debt.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("delete", CallbackWithData(CallbackDeleteDebt, debt.ID)),
+		))
+
+		msg := tgbotapi.NewMessage(chatID, messageText.String())
+		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
+
+		err = b.Send(msg)
+		b.logger.Warnf("Failed to send message: %+v", err)
+	}
 
 	var (
 		messageText  strings.Builder
@@ -84,37 +133,17 @@ func (b *Bot) showDebtMenu(chatID int64) {
 	)
 
 	messageText.WriteString(fmt.Sprintf(
-		"Total debt: %s:%s\n\n",
-		emojiMoney,
-		formatAmount(debts.Amount)))
-
-	for _, debt := range debts.Details {
-		messageText.WriteString(fmt.Sprintf(
-			"%s:%d\n%s:%s\n%s:%s\n%s:%s\n\n",
-			emojiId,
-			debt.ID,
-			emojiInfo,
-			debt.Description,
-			emojiMoney,
-			formatAmount(debt.Amount),
-			emojiCalendar,
-			formatDate(debt.ReturnDate),
-		))
-
-		keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("(%s:%d) PAY", emojiId, debt.ID), CallbackWithData(CallbackPayDebt, debt.ID)),
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("(%s:%d) EDIT", emojiId, debt.ID), CallbackWithData(CallbackEditDebt, debt.ID)),
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("(%s:%d) DELETE", emojiId, debt.ID), CallbackWithData(CallbackDeleteDebt, debt.ID)),
-		))
-	}
+		"Total debt:%s\n\n",
+		b.formatAmount(debts.Amount)))
 
 	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData(emojiActionAdd+" add Debt", CallbackAddDebt),
-		tgbotapi.NewInlineKeyboardButtonData(emojiActionBack+" home", CallbackMainMenu),
+		tgbotapi.NewInlineKeyboardButtonData("new", CallbackAddDebt),
+		tgbotapi.NewInlineKeyboardButtonData("home", CallbackMainMenu),
 	))
 
 	msg := tgbotapi.NewMessage(chatID, messageText.String())
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
-	b.Send(msg)
+	err = b.Send(msg)
+	b.logger.Warnf("Failed to send message: %+v", err)
 }
